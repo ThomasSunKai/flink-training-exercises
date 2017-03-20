@@ -39,6 +39,7 @@ import java.util.Locale;
 public class ConnectedCarEvent implements Comparable<ConnectedCarEvent> {
 
 	public String id;
+	public String car_id;
 	public long timestamp;
 	public float longitude;
 	public float latitude;
@@ -51,20 +52,6 @@ public class ConnectedCarEvent implements Comparable<ConnectedCarEvent> {
 			DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ").withLocale(Locale.US).withZoneUTC();
 
 	public ConnectedCarEvent() {}
-
-	public ConnectedCarEvent(String id, long timestamp,
-                        float longitude, float latitude, float consumption,
-                        float speed, float throttle, float engineload) {
-
-		this.id = id;
-		this.timestamp = timestamp;
-		this.longitude = longitude;
-		this.latitude = latitude;
-		this.consumption = consumption;
-		this.speed = speed;
-		this.throttle = throttle;
-		this.engineload = engineload;
-	}
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -81,22 +68,23 @@ public class ConnectedCarEvent implements Comparable<ConnectedCarEvent> {
 
 	public static ConnectedCarEvent fromString(String line) {
 
-		String[] tokens = line.split(";\\s*");
-		if (tokens.length != 22) {
+		String[] tokens = line.split("(,|;)\\s*");
+		if (tokens.length != 23) {
 			throw new RuntimeException("Invalid record: " + line);
 		}
 
 		ConnectedCarEvent event = new ConnectedCarEvent();
 
 		try {
-			event.id = tokens[0];
-			event.timestamp = DateTime.parse(tokens[21], timeFormatter).getMillis();
-			event.longitude = tokens[19].length() > 0 ? Float.parseFloat(tokens[19]) : 0.0f;
-			event.latitude = tokens[20].length() > 0 ? Float.parseFloat(tokens[20]) : 0.0f;
-			event.consumption = tokens[6].length() > 0 ? Float.parseFloat(tokens[6]) : 0.0f;
-			event.speed = tokens[8].length() > 0 ? Float.parseFloat(tokens[8]) : 0.0f;
-			event.throttle = tokens[11].length() > 0 ? Float.parseFloat(tokens[11]) : 0.0f;
-			event.engineload = tokens[18].length() > 0 ? Float.parseFloat(tokens[18]) : 0.0f;
+			event.id = tokens[1];
+			event.car_id = tokens[0];
+			event.timestamp = DateTime.parse(tokens[22], timeFormatter).getMillis();
+			event.longitude = tokens[20].length() > 0 ? Float.parseFloat(tokens[20]) : 0.0f;
+			event.latitude = tokens[21].length() > 0 ? Float.parseFloat(tokens[21]) : 0.0f;
+			event.consumption = tokens[7].length() > 0 ? Float.parseFloat(tokens[7]) : 0.0f;
+			event.speed = tokens[9].length() > 0 ? Float.parseFloat(tokens[9]) : 0.0f;
+			event.throttle = tokens[12].length() > 0 ? Float.parseFloat(tokens[12]) : 0.0f;
+			event.engineload = tokens[19].length() > 0 ? Float.parseFloat(tokens[19]) : 0.0f;
 
 		} catch (NumberFormatException nfe) {
 			throw new RuntimeException("Invalid field: " + line, nfe);

@@ -20,43 +20,36 @@ import java.util.Iterator;
 import java.util.TreeSet;
 
 /**
- * A Segment contains data about an uninterrupted stretch of driving without stopping.
+ * A Segment contains data about a continuous stretch of driving.
  *
  */
 public class Segment {
 	public Long startTime;
-	public Long finishTime;
-	public float maxSpeed;
 	public long length;
+	public int maxSpeed;
+	public float erraticness;
 
 	public Segment() {}
 
-	public Segment(Iterable<ConnectedCarEvent> events) {
-		TreeSet<ConnectedCarEvent> set = new TreeSet<ConnectedCarEvent>();
-
-		this.finishTime = Segment.earliestStopEvent(events);
-
-		for (Iterator<ConnectedCarEvent	> iterator = events.iterator(); iterator.hasNext(); ) {
-			ConnectedCarEvent event = iterator.next();
-			if (event.timestamp < this.finishTime) {
-				set.add(event);
-			}
-		}
-
-		this.length = set.size();
-		if (this.length > 0) {
-			this.startTime = set.first().timestamp;
-			this.maxSpeed = Segment.maxSpeed(set);
-		}
-	}
-
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append(startTime).append(",");
-		sb.append(maxSpeed).append(",");
-		sb.append(length);
+		sb.append(startTime).append(",")
+			.append(length).append(" events,")
+			.append(maxSpeed).append(" kph,")
+			.append(erraticnessDesc());
 
 		return sb.toString();
+	}
+
+	public String erraticnessDesc() {
+		switch((int)(erraticness / 2.5)) {
+			case 0:
+				return "calm";
+			case 1:
+				return "busy";
+			default:
+				return "crazy";
+		}
 	}
 
 	@Override
@@ -70,26 +63,29 @@ public class Segment {
 		return (int)this.startTime.hashCode();
 	}
 
-	private static Long earliestStopEvent(Iterable<ConnectedCarEvent> events) {
-		long earliestTime = Long.MAX_VALUE;
+	protected static float maxSpeed(ConnectedCarEvent[] array) {
+		float max = 0.0f;
 
-		for (Iterator<ConnectedCarEvent	> iterator = events.iterator(); iterator.hasNext(); ) {
-			ConnectedCarEvent event = iterator.next();
-			if (event.timestamp < earliestTime && event.speed == 0.0) {
-				earliestTime = event.timestamp;
-			}
-		}
-
-		return earliestTime;
-	}
-
-	private static float maxSpeed(TreeSet<ConnectedCarEvent> set) {
-		float max = 0;
-
-		for (Iterator<ConnectedCarEvent> iterator = set.iterator(); iterator.hasNext(); ) {
-			ConnectedCarEvent event = iterator.next();
+		for (ConnectedCarEvent event : array) {
 			if (event.speed > max) max = event.speed;
 		}
 		return max;
+	}
+
+	protected static float stddevThrottle(ConnectedCarEvent[] array) {
+		float sum = 0.0f;
+		float mean;
+		float sum_of_sq_diffs = 0;
+
+		for (ConnectedCarEvent event : array) {
+			sum += event.throttle;
+		}
+
+		mean = sum / array.length;
+		for (ConnectedCarEvent event : array) {
+			sum_of_sq_diffs += (event.throttle - mean) * (event.throttle - mean);
+		}
+
+		return (float) Math.sqrt(sum_of_sq_diffs/array.length);
 	}
 }

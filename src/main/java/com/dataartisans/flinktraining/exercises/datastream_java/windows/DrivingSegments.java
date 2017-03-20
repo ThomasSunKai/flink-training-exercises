@@ -17,24 +17,23 @@
 package com.dataartisans.flinktraining.exercises.datastream_java.windows;
 
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.ConnectedCarEvent;
-import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Segment;
+import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.StoppedSegment;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.base.BooleanSerializer;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks;
-import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
-import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
 import org.apache.flink.streaming.api.windowing.evictors.Evictor;
-import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.triggers.Trigger;
 import org.apache.flink.streaming.api.windowing.triggers.TriggerResult;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
@@ -48,7 +47,8 @@ import java.util.TreeSet;
  * Java reference implementation for the "Driving Segments" exercise of the Flink training
  * (http://dataartisans.github.io/flink-training).
  *
- * The task of the exercise is to ...
+ * The task of the exercise is to divide the input stream of ConnectedCarEvents into segments,
+ * where the car is being continously driven without stopping.
  *
  * Parameters:
  * -input path-to-input-file
@@ -66,8 +66,10 @@ public class DrivingSegments {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setParallelism(1);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-//		ExecutionConfig conf = env.getConfig();
-//		conf.setAutoWatermarkInterval(100);
+
+		// auto watermarking doesn't work in this case, because the source runs to completion quickly
+		// and the watermarking never gets a chance to run (unlike a long-running streaming job)
+// 		env.getConfig().setAutoWatermarkInterval(1);
 
 		// connect to the data file
 		DataStream<String> carData = env.readTextFile(input);
@@ -82,10 +84,11 @@ public class DrivingSegments {
 				})
 				.assignTimestampsAndWatermarks(new ConnectedCarAssigner());
 
-		events.windowAll(GlobalWindows.create())
+		events.keyBy("car_id")
+		        .window(GlobalWindows.create())
 				.trigger(new SegmentingOutOfOrderTrigger())
 				.evictor(new SegmentingEvictor())
-				.apply(new CreateSegment())
+				.apply(new CreateStoppedSegment())
 				.print();
 
 		env.execute("Driving Segments");
@@ -190,11 +193,13 @@ public class DrivingSegments {
 	public static class SegmentingEvictor implements Evictor<ConnectedCarEvent, GlobalWindow> {
 
 		@Override
-		public void evictBefore(Iterable<TimestampedValue<ConnectedCarEvent>> events, int size, GlobalWindow window, EvictorContext ctx) {
+		public void evictBefore(Iterable<TimestampedValue<ConnectedCarEvent>> events,
+								int size, GlobalWindow window, EvictorContext ctx) {
 		}
 
 		@Override
-		public void evictAfter(Iterable<TimestampedValue<ConnectedCarEvent>> elements, int size, GlobalWindow window, EvictorContext ctx) {
+		public void evictAfter(Iterable<TimestampedValue<ConnectedCarEvent>> elements,
+							   int size, GlobalWindow window, EvictorContext ctx) {
 			long firstStop = ConnectedCarEvent.earliestStopElement(elements);
 
 			for (Iterator<TimestampedValue<ConnectedCarEvent>> iterator = elements.iterator(); iterator.hasNext();) {
@@ -210,16 +215,16 @@ public class DrivingSegments {
 	 * Assigns timestamps to the events.
 	 * Watermarks are a fixed time interval behind the max timestamp and are periodically emitted.
 	 */
-	public static class ConnectedCarTSExtractor extends BoundedOutOfOrdernessTimestampExtractor<ConnectedCarEvent> {
-		public ConnectedCarTSExtractor() {
-			super(Time.seconds(10));
-		}
-
-		@Override
-		public long extractTimestamp(ConnectedCarEvent event) {
-			return event.timestamp;
-		}
-	}
+//	public static class ConnectedCarTSExtractor extends BoundedOutOfOrdernessTimestampExtractor<ConnectedCarEvent> {
+//		public ConnectedCarTSExtractor() {
+//			super(Time.seconds(10));
+//		}
+//
+//		@Override
+//		public long extractTimestamp(ConnectedCarEvent event) {
+//			return event.timestamp;
+//		}
+//	}
 
 	public static class ConnectedCarAssigner implements AssignerWithPunctuatedWatermarks<ConnectedCarEvent> {
 		@Override
@@ -229,14 +234,14 @@ public class DrivingSegments {
 
 		@Override
 		public Watermark checkAndGetNextWatermark(ConnectedCarEvent event, long extractedTimestamp) {
-			return new Watermark(extractedTimestamp - 10000);
+			return new Watermark(extractedTimestamp - 30000);
 		}
 	}
 
-	public static class CreateSegment implements AllWindowFunction<ConnectedCarEvent, Segment, GlobalWindow> {
+	public static class CreateStoppedSegment implements WindowFunction<ConnectedCarEvent, StoppedSegment, Tuple, GlobalWindow> {
 		@Override
-		public void apply(GlobalWindow window, Iterable<ConnectedCarEvent> events, Collector<Segment> out) {
-			Segment seg = new Segment(events);
+		public void apply(Tuple key, GlobalWindow window, Iterable<ConnectedCarEvent> events, Collector<StoppedSegment> out) {
+			StoppedSegment seg = new StoppedSegment(events);
 			if (seg.length > 0) {
 				out.collect(seg);
 			}
