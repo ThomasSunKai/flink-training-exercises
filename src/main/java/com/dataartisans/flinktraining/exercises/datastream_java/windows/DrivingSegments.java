@@ -23,7 +23,6 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeutils.base.BooleanSerializer;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -48,7 +47,7 @@ import java.util.TreeSet;
  * (http://dataartisans.github.io/flink-training).
  *
  * The task of the exercise is to divide the input stream of ConnectedCarEvents into segments,
- * where the car is being continously driven without stopping.
+ * where the car is being continuously driven without stopping.
  *
  * Parameters:
  * -input path-to-input-file
@@ -67,14 +66,10 @@ public class DrivingSegments {
 		env.setParallelism(1);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-		// auto watermarking doesn't work in this case, because the source runs to completion quickly
-		// and the watermarking never gets a chance to run (unlike a long-running streaming job)
-// 		env.getConfig().setAutoWatermarkInterval(1);
-
 		// connect to the data file
 		DataStream<String> carData = env.readTextFile(input);
 
-		// find segments
+        // map to events
 		DataStream<ConnectedCarEvent> events = carData
 				.map(new MapFunction<String, ConnectedCarEvent>() {
 					@Override
@@ -84,6 +79,7 @@ public class DrivingSegments {
 				})
 				.assignTimestampsAndWatermarks(new ConnectedCarAssigner());
 
+        // find segments
 		events.keyBy("car_id")
 		        .window(GlobalWindows.create())
 				.trigger(new SegmentingOutOfOrderTrigger())
@@ -94,30 +90,15 @@ public class DrivingSegments {
 		env.execute("Driving Segments");
 	}
 
+    // triggering would be much simpler if we didn't have to worry about out-of-order events
 	public static class SegmentingInOrderTrigger extends Trigger<ConnectedCarEvent, GlobalWindow> {
-		private final ValueStateDescriptor<Boolean> stoppedState =
-				new ValueStateDescriptor<Boolean>("stopped", BooleanSerializer.INSTANCE);
-
 		@Override
 		public TriggerResult onElement(ConnectedCarEvent event, long timestamp, GlobalWindow window, TriggerContext ctx) throws Exception {
-			ValueState<Boolean> stopped = ctx.getPartitionedState(stoppedState);
-
-			if (stopped.value() == null) {
-				if (event.speed == 0.0) stopped.update(true);
-				else stopped.update(false);
-			}
-			else {
-				if (stopped.value() == true && event.speed > 0.0) {
-					stopped.update(false);
-					return TriggerResult.FIRE;
-				}
-				if (stopped.value() == false && event.speed == 0.0) {
-					stopped.update(true);
-					return TriggerResult.FIRE;
-				}
-			}
-			return TriggerResult.CONTINUE;
-		}
+            if (event.speed == 0.0) {
+                return TriggerResult.FIRE;
+            }
+            return TriggerResult.CONTINUE;
+        }
 
 		@Override
 		public TriggerResult onEventTime(long time, GlobalWindow window, TriggerContext ctx) {
@@ -130,15 +111,8 @@ public class DrivingSegments {
 		}
 
 		@Override
-		public void clear(GlobalWindow window, TriggerContext ctx) {
-			ctx.getPartitionedState(stoppedState).clear();
-		}
-
-		@Override
-		public boolean canMerge() {
-			return false;
-		}
-	}
+		public void clear(GlobalWindow window, TriggerContext ctx) { }
+    }
 
 	public static class SegmentingOutOfOrderTrigger extends Trigger<ConnectedCarEvent, GlobalWindow> {
 		private final ValueStateDescriptor<TreeSet<Long>> stoppingTimesDesc =
@@ -150,9 +124,12 @@ public class DrivingSegments {
 									   long timestamp,
 									   GlobalWindow window,
 									   TriggerContext ctx) throws Exception {
+
+            // keep track of events where the car is stopped
 			ValueState<TreeSet<Long>> stoppingTimes = ctx.getPartitionedState(stoppingTimesDesc);
 			TreeSet<Long> setOfTimes = stoppingTimes.value();
 
+			// add a new stopped event to our Set
 			if (event.speed == 0.0) {
 				if (setOfTimes == null) {
 					setOfTimes = new TreeSet<Long>();
@@ -161,6 +138,7 @@ public class DrivingSegments {
 				stoppingTimes.update(setOfTimes);
 			}
 
+			// trigger the window when the watermark passes the earliest stop event
 			if (setOfTimes != null && !setOfTimes.isEmpty()) {
 				java.util.Iterator<Long> iter = setOfTimes.iterator();
 				long nextStop = iter.next();
@@ -171,6 +149,7 @@ public class DrivingSegments {
 				}
 			}
 
+            // otherwise continue
 			return TriggerResult.CONTINUE;
 		}
 
@@ -202,6 +181,7 @@ public class DrivingSegments {
 							   int size, GlobalWindow window, EvictorContext ctx) {
 			long firstStop = ConnectedCarEvent.earliestStopElement(elements);
 
+            // remove all events up to the first stop event (which is the event that triggered the window)
 			for (Iterator<TimestampedValue<ConnectedCarEvent>> iterator = elements.iterator(); iterator.hasNext();) {
 				TimestampedValue<ConnectedCarEvent> element = iterator.next();
 				if (element.getTimestamp() <= firstStop) {
@@ -211,21 +191,6 @@ public class DrivingSegments {
 		}
 	}
 
-	/**
-	 * Assigns timestamps to the events.
-	 * Watermarks are a fixed time interval behind the max timestamp and are periodically emitted.
-	 */
-//	public static class ConnectedCarTSExtractor extends BoundedOutOfOrdernessTimestampExtractor<ConnectedCarEvent> {
-//		public ConnectedCarTSExtractor() {
-//			super(Time.seconds(10));
-//		}
-//
-//		@Override
-//		public long extractTimestamp(ConnectedCarEvent event) {
-//			return event.timestamp;
-//		}
-//	}
-
 	public static class ConnectedCarAssigner implements AssignerWithPunctuatedWatermarks<ConnectedCarEvent> {
 		@Override
 		public long extractTimestamp(ConnectedCarEvent event, long previousElementTimestamp) {
@@ -234,6 +199,7 @@ public class DrivingSegments {
 
 		@Override
 		public Watermark checkAndGetNextWatermark(ConnectedCarEvent event, long extractedTimestamp) {
+            // simply emit a watermark with every event
 			return new Watermark(extractedTimestamp - 30000);
 		}
 	}
