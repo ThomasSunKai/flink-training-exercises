@@ -32,13 +32,12 @@ public class GapSegment extends Segment {
             list.add(event);
         }
 
-        ConnectedCarEvent[] array = list.toArray(new ConnectedCarEvent[list.size()]);
-        this.length = array.length;
+        this.length = list.size();
 
         if (this.length > 0) {
-            this.startTime = array[0].timestamp;
-            this.maxSpeed = (int) GapSegment.maxSpeed(array);
-            this.erraticness = GapSegment.stddevThrottle(array);
+            this.startTime = GapSegment.minTimestamp(list);
+            this.maxSpeed = (int) GapSegment.maxSpeed(list);
+            this.erraticness = GapSegment.stddevThrottle(list);
         }
     }
 

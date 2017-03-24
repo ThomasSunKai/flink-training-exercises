@@ -16,8 +16,8 @@
 
 package com.dataartisans.flinktraining.exercises.datastream_java.datatypes;
 
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.TreeSet;
 
 /**
  * A StoppedSegment is punctuated by the car stopping.
@@ -28,21 +28,20 @@ public class StoppedSegment extends Segment {
     public StoppedSegment(Iterable<ConnectedCarEvent> events) {
         long finishTime = StoppedSegment.earliestStopEvent(events);
 
-        TreeSet<ConnectedCarEvent> set = new TreeSet<ConnectedCarEvent>();
+        ArrayList<ConnectedCarEvent> list = new ArrayList<ConnectedCarEvent>();
         for (Iterator<ConnectedCarEvent	> iterator = events.iterator(); iterator.hasNext(); ) {
             ConnectedCarEvent event = iterator.next();
             if (event.timestamp < finishTime) {
-                set.add(event);
+                list.add(event);
             }
         }
 
-        ConnectedCarEvent[] array = set.toArray(new ConnectedCarEvent[set.size()]);
-        this.length = array.length;
+        this.length = list.size();
 
         if (this.length > 0) {
-            this.startTime = array[0].timestamp;
-            this.maxSpeed = (int) Segment.maxSpeed(array);
-            this.erraticness = Segment.stddevThrottle(array);
+            this.startTime = Segment.minTimestamp(list);
+            this.maxSpeed = (int) Segment.maxSpeed(list);
+            this.erraticness = Segment.stddevThrottle(list);
         }
     }
 

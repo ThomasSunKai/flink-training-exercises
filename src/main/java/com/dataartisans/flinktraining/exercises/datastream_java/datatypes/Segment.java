@@ -16,8 +16,7 @@
 
 package com.dataartisans.flinktraining.exercises.datastream_java.datatypes;
 
-import java.util.Iterator;
-import java.util.TreeSet;
+import java.util.*;
 
 /**
  * A Segment contains data about a continuous stretch of driving.
@@ -25,7 +24,7 @@ import java.util.TreeSet;
  */
 public class Segment {
 	public Long startTime;
-	public long length;
+	public int length;
 	public int maxSpeed;
 	public float erraticness;
 
@@ -63,16 +62,17 @@ public class Segment {
 		return (int)this.startTime.hashCode();
 	}
 
-	protected static float maxSpeed(ConnectedCarEvent[] array) {
-		float max = 0.0f;
-
-		for (ConnectedCarEvent event : array) {
-			if (event.speed > max) max = event.speed;
-		}
-		return max;
+	protected static float maxSpeed(ArrayList<ConnectedCarEvent> events) {
+        ConnectedCarEvent fastest = Collections.max(events, new compSpeed());
+        return fastest.speed;
 	}
 
-	protected static float stddevThrottle(ConnectedCarEvent[] array) {
+    protected static long minTimestamp(ArrayList<ConnectedCarEvent> events) {
+        ConnectedCarEvent first = Collections.min(events, new compTimestamp());
+        return first.timestamp;
+    }
+
+    protected static float stddevThrottle(ArrayList<ConnectedCarEvent> array) {
 		float sum = 0.0f;
 		float mean;
 		float sum_of_sq_diffs = 0;
@@ -81,11 +81,31 @@ public class Segment {
 			sum += event.throttle;
 		}
 
-		mean = sum / array.length;
+		mean = sum / array.size();
 		for (ConnectedCarEvent event : array) {
 			sum_of_sq_diffs += (event.throttle - mean) * (event.throttle - mean);
 		}
 
-		return (float) Math.sqrt(sum_of_sq_diffs/array.length);
+		return (float) Math.sqrt(sum_of_sq_diffs/array.size());
 	}
+
+	private static class compSpeed implements Comparator<ConnectedCarEvent> {
+	    public int compare (ConnectedCarEvent a, ConnectedCarEvent b) {
+	        if (a.speed > b.speed)
+	            return 1;
+	        if (a.speed == b.speed)
+	            return 0;
+	        return -1;
+        }
+    }
+
+    private static class compTimestamp implements Comparator<ConnectedCarEvent> {
+        public int compare (ConnectedCarEvent a, ConnectedCarEvent b) {
+            if (a.timestamp < b.timestamp)
+                return 1;
+            if (a.timestamp == b.timestamp)
+                return 0;
+            return -1;
+        }
+    }
 }

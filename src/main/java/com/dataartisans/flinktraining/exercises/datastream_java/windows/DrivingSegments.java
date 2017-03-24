@@ -19,10 +19,6 @@ package com.dataartisans.flinktraining.exercises.datastream_java.windows;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.ConnectedCarEvent;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.StoppedSegment;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -40,7 +36,6 @@ import org.apache.flink.streaming.runtime.operators.windowing.TimestampedValue;
 import org.apache.flink.util.Collector;
 
 import java.util.Iterator;
-import java.util.TreeSet;
 
 /**
  * Java reference implementation for the "Driving Segments" exercise of the Flink training
@@ -115,47 +110,24 @@ public class DrivingSegments {
     }
 
 	public static class SegmentingOutOfOrderTrigger extends Trigger<ConnectedCarEvent, GlobalWindow> {
-		private final ValueStateDescriptor<TreeSet<Long>> stoppingTimesDesc =
-				new ValueStateDescriptor<TreeSet<Long>>("stopping-times-desc",
-						TypeInformation.of(new TypeHint<TreeSet<Long>>() {}));
 
 		@Override
 		public TriggerResult onElement(ConnectedCarEvent event,
 									   long timestamp,
 									   GlobalWindow window,
-									   TriggerContext ctx) throws Exception {
+									   TriggerContext context) throws Exception {
 
-            // keep track of events where the car is stopped
-			ValueState<TreeSet<Long>> stoppingTimes = ctx.getPartitionedState(stoppingTimesDesc);
-			TreeSet<Long> setOfTimes = stoppingTimes.value();
-
-			// add a new stopped event to our Set
+			// if this is a stop event, set a timer
 			if (event.speed == 0.0) {
-				if (setOfTimes == null) {
-					setOfTimes = new TreeSet<Long>();
-				}
-				setOfTimes.add(event.timestamp);
-				stoppingTimes.update(setOfTimes);
+                context.registerEventTimeTimer(event.timestamp);
 			}
 
-			// trigger the window when the watermark passes the earliest stop event
-			if (setOfTimes != null && !setOfTimes.isEmpty()) {
-				java.util.Iterator<Long> iter = setOfTimes.iterator();
-				long nextStop = iter.next();
-				if (ctx.getCurrentWatermark() >= nextStop) {
-					iter.remove();
-					stoppingTimes.update(setOfTimes);
-					return TriggerResult.FIRE;
-				}
-			}
-
-            // otherwise continue
 			return TriggerResult.CONTINUE;
 		}
 
 		@Override
 		public TriggerResult onEventTime(long time, GlobalWindow window, TriggerContext ctx) {
-			return TriggerResult.CONTINUE;
+			return TriggerResult.FIRE;
 		}
 
 		@Override
@@ -164,9 +136,7 @@ public class DrivingSegments {
 		}
 
 		@Override
-		public void clear(GlobalWindow window, TriggerContext ctx) {
-			ctx.getPartitionedState(stoppingTimesDesc).clear();
-		}
+		public void clear(GlobalWindow window, TriggerContext ctx) { }
 	}
 
 	public static class SegmentingEvictor implements Evictor<ConnectedCarEvent, GlobalWindow> {
