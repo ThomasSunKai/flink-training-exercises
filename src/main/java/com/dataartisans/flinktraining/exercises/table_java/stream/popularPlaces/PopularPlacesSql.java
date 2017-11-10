@@ -16,15 +16,20 @@
 
 package com.dataartisans.flinktraining.exercises.table_java.stream.popularPlaces;
 
+import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.TaxiRide;
 import com.dataartisans.flinktraining.exercises.datastream_java.utils.GeoUtils;
+import com.dataartisans.flinktraining.exercises.datastream_java.utils.TaxiRideSchema;
 import com.dataartisans.flinktraining.exercises.table_java.sources.TaxiRideTableSource;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.types.Row;
+
+import java.util.Properties;
 
 public class PopularPlacesSql {
 
@@ -44,13 +49,24 @@ public class PopularPlacesSql {
 		// create a TableEnvironment
 		StreamTableEnvironment tEnv = TableEnvironment.getTableEnvironment(env);
 
+		Properties kafkaProps = new Properties();
+		kafkaProps.setProperty("zookeeper.connect", "127.0.0.1:57523");
+		kafkaProps.setProperty("bootstrap.servers", "127.0.0.1:57528");
+		kafkaProps.setProperty("group.id", "sql");
+		// always read the Kafka topic from the start
+		kafkaProps.setProperty("auto.offset.reset", "earliest");
+
+		// create a Kafka consumer
+		FlinkKafkaConsumer010<TaxiRide> consumer = new FlinkKafkaConsumer010<>(
+				"SQLtest",
+				new TaxiRideSchema(),
+				kafkaProps);
+
 		// register TaxiRideTableSource as table "TaxiRides"
 		tEnv.registerTableSource(
 				"TaxiRides",
 				new TaxiRideTableSource(
-						input,
-						maxEventDelay,
-						servingSpeedFactor));
+						consumer));
 
 		// register user-defined functions
 		tEnv.registerFunction("isInNYC", new GeoUtils.IsInNYC());
@@ -58,29 +74,13 @@ public class PopularPlacesSql {
 		tEnv.registerFunction("toCoords", new GeoUtils.ToCoords());
 
 		Table results = tEnv.sql(
-			"SELECT " +
-				"toCoords(cell), wstart, wend, isStart, popCnt " +
-			"FROM " +
-				"(SELECT " +
-					"cell, " +
-					"isStart, " +
-					"HOP_START(eventTime, INTERVAL '5' MINUTE, INTERVAL '15' MINUTE) AS wstart, " +
-					"HOP_END(eventTime, INTERVAL '5' MINUTE, INTERVAL '15' MINUTE) AS wend, " +
-					"COUNT(isStart) AS popCnt " +
-				"FROM " +
-					"(SELECT " +
-						"eventTime, " +
-						"isStart, " +
-						"CASE WHEN isStart THEN toCellId(startLon, startLat) ELSE toCellId(endLon, endLat) END AS cell " +
-					"FROM TaxiRides " +
-					"WHERE isInNYC(startLon, startLat) AND isInNYC(endLon, endLat)) " +
-				"GROUP BY cell, isStart, HOP(eventTime, INTERVAL '5' MINUTE, INTERVAL '15' MINUTE)) " +
-			"WHERE popCnt > 20"
+			//"SELECT isStart, count(isStart) FROM TaxiRides GROUP BY isStart"
+				"SELECT count(*) from TaxiRides"
 			);
 
 		// convert Table into an append stream and print it
 		// (if instead we needed a retraction stream we would use tEnv.toRetractStream)
-		tEnv.toAppendStream(results, Row.class).print();
+		tEnv.toRetractStream(results, Row.class).print();
 
 		// execute query
 		env.execute();

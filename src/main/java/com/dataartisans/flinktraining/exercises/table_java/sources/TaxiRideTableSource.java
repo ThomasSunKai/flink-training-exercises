@@ -24,6 +24,8 @@ import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010;
 import org.apache.flink.table.sources.DefinedRowtimeAttribute;
 import org.apache.flink.table.sources.StreamTableSource;
 import org.apache.flink.types.Row;
@@ -48,7 +50,7 @@ import org.apache.flink.types.Row;
  */
 public class TaxiRideTableSource implements StreamTableSource<Row>, DefinedRowtimeAttribute {
 
-	private final TaxiRideSource taxiRideSource;
+	private final SourceFunction<TaxiRide> taxiRideSource;
 
 	/**
 	 * Serves the taxi ride rows from the specified and ordered gzipped input file.
@@ -84,6 +86,10 @@ public class TaxiRideTableSource implements StreamTableSource<Row>, DefinedRowti
 	 */
 	public TaxiRideTableSource(String dataFilePath, int maxEventDelaySecs, int servingSpeedFactor) {
 		this.taxiRideSource = new TaxiRideSource(dataFilePath, maxEventDelaySecs, servingSpeedFactor);
+	}
+
+	public TaxiRideTableSource(FlinkKafkaConsumer010<TaxiRide> consumer) {
+		this.taxiRideSource = consumer;
 	}
 
 	/**

@@ -43,7 +43,7 @@ import java.util.Properties;
  *
  * The task of the exercise is to identify every five minutes popular areas where many taxi rides
  * arrived or departed in the last 15 minutes.
- * The input is read from a Kafka topic that containes cleansed taxi rides.
+ * The input is read from a Kafka topic that contains cleansed taxi rides.
  *
  */
 public class PopularPlacesFromKafka {
@@ -72,7 +72,7 @@ public class PopularPlacesFromKafka {
 
 		// create a Kafka consumer
 		FlinkKafkaConsumer010<TaxiRide> consumer = new FlinkKafkaConsumer010<>(
-				"cleansedRides",
+				"SQLtest",
 				new TaxiRideSchema(),
 				kafkaProps);
 		// assign a timestamp extractor to the consumer
