@@ -16,7 +16,7 @@
 
 package com.dataartisans.flinktraining.exercises.datastream_java.datatypes;
 
-public class Trade {
+public class Trade implements Comparable<Trade> {
 
 	public Trade() {}
 
@@ -37,4 +37,9 @@ public class Trade {
 		sb.append(tradeInfo);
 		return sb.toString();
 	}
+
+	public int compareTo(Trade other) {
+		return Long.compare(this.timestamp, other.timestamp);
+	}
+
 }

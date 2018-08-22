@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dataartisans.flinktraining.examples.datastream_java.process;
+package com.dataartisans.flinktraining.solutions.datastream_java.process;
 
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Customer;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.EnrichedTrade;
@@ -23,25 +23,19 @@ import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.util.Collector;
 
 /**
- * This is a homegrown join function using the new Flink 1.2 ProcessFunction.
+ * This is a homegrown event-time-based enrichment join function using a CoProcessFunction.
  * Basically, what we do is the following:
  *
- * 1) When we receive a trade we join it against the customer data right away, however
- * to keep this 100% deterministic we join against the latest customer data that
+ * 1) When we receive a trade we want to join it against the customer data, however
+ * to keep this 100% deterministic we will join against customer data that
  * has a timestamp LESS THAN the trade timestamp -- not simply the latest available data.
- * In other words we are joining against the customer data that we knew at the time of the trade.
+ * In other words we are joining against the customer data that was knowable at the time of the trade.
  *
- * 2) We also set a trigger to evaluate the trade again once the watermark has passed the trade
- * time.  Basically, what we're doing here is using event time to ensure that we have
- * "complete" data and then joining again at that time. This will give us a deterministic
- * result even in the face of undordered data, etc
+ * 2) Furthermore, we are going to wait until the current watermark (the event-time clock) reaches
+ * the timestamp of the trade. This will give us a deterministic result even in the face of
+ * out-of-order data.
  *
- * This approach has the benefit that you don't introduce any latency into the trade stream
- * because you always join right away.  You then emit a BETTER result if you receive better
- * information.  We use event time in order to know how long we must wait for this potential
- * better information.
- *
- * We also use event time to know when it's safe to expire state.
+ * 3) We also use event time to know when it's safe to expire state.
  */
 
 public class EventTimeJoinFunction extends EventTimeJoinHelper {
@@ -50,13 +44,11 @@ public class EventTimeJoinFunction extends EventTimeJoinHelper {
 								Context context,
 								Collector<EnrichedTrade> collector)
 			throws Exception {
-		System.out.println("Java Received " + trade.toString());
+		System.out.println("Received " + trade.toString());
 		TimerService timerService = context.timerService();
-		EnrichedTrade joinedData = join(trade);
-		collector.collect(joinedData);
 
 		if (context.timestamp() > timerService.currentWatermark()) {
-			enqueueEnrichedTrade(joinedData);
+			enqueueTrade(trade);
 			timerService.registerEventTimeTimer(trade.timestamp);
 		} else {
 			// Handle late data -- detect and join against what, latest?  Drop it?
@@ -68,7 +60,7 @@ public class EventTimeJoinFunction extends EventTimeJoinHelper {
 								Context context,
 								Collector<EnrichedTrade> collector)
 			throws Exception {
-		System.out.println("Java Received " + customer.toString());
+		System.out.println("Received " + customer.toString());
 		enqueueCustomer(customer);
 	}
 
@@ -77,28 +69,17 @@ public class EventTimeJoinFunction extends EventTimeJoinHelper {
 						OnTimerContext context,
 						Collector<EnrichedTrade> collector)
 			throws Exception {
+
 		// look for trades that can now be completed
 		// do the join, and remove from the tradebuffer
 		Long watermark = context.timerService().currentWatermark();
 		while (timestampOfFirstTrade() <= watermark) {
-			dequeueAndPerhapsEmit(collector);
+			Trade trade = dequeueTrade();
+			EnrichedTrade joinedData = new EnrichedTrade(trade, getCustomerRecord(trade));
+			collector.collect(joinedData);
+			System.out.println("Emiting " + joinedData + " at " + watermark);
 		}
 
 		cleanupEligibleCustomerData(watermark);
-	}
-
-	private EnrichedTrade join(Trade trade) throws Exception {
-		return new EnrichedTrade(trade, getCustomerInfo(trade));
-	}
-
-	private void dequeueAndPerhapsEmit(Collector<EnrichedTrade> collector)
-			throws Exception {
-		EnrichedTrade enrichedTrade = dequeueEnrichedTrade();
-
-		EnrichedTrade joinedData = join(enrichedTrade.trade);
-		// Only emit again if we have better data
-		if (!joinedData.equals(enrichedTrade)) {
-			collector.collect(joinedData);
-		}
 	}
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dataartisans.flinktraining.examples.datastream_java.process;
+package com.dataartisans.flinktraining.solutions.datastream_java.process;
 
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Customer;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.EnrichedTrade;
@@ -31,14 +31,14 @@ import java.util.PriorityQueue;
 
 abstract class EventTimeJoinHelper extends CoProcessFunction<Trade, Customer, EnrichedTrade> {
 
-	private ValueState<PriorityQueue<EnrichedTrade>> tradeBufferState = null;
+	private ValueState<PriorityQueue<Trade>> tradeBufferState = null;
 	private ValueState<PriorityQueue<Customer>> customerBufferState = null;
 
 	@Override
 	public void open(Configuration config) {
-		ValueStateDescriptor<PriorityQueue<EnrichedTrade>> tDescriptor = new ValueStateDescriptor<>(
+		ValueStateDescriptor<PriorityQueue<Trade>> tDescriptor = new ValueStateDescriptor<>(
 				"tradeBuffer",
-				TypeInformation.of(new TypeHint<PriorityQueue<EnrichedTrade>>() {
+				TypeInformation.of(new TypeHint<PriorityQueue<Trade>>() {
 				}));
 		tradeBufferState = getRuntimeContext().getState(tDescriptor);
 
@@ -50,26 +50,26 @@ abstract class EventTimeJoinHelper extends CoProcessFunction<Trade, Customer, En
 	}
 
 	protected Long timestampOfFirstTrade() throws Exception {
-		PriorityQueue<EnrichedTrade> tradeBuffer = tradeBufferState.value();
-		EnrichedTrade first = tradeBuffer.peek();
+		PriorityQueue<Trade> tradeBuffer = tradeBufferState.value();
+		Trade first = tradeBuffer.peek();
 		if (first == null) {
 			return Long.MAX_VALUE;
 		} else {
-			return first.trade.timestamp;
+			return first.timestamp;
 		}
 	}
 
-	protected String getCustomerInfo(Trade trade) throws Exception {
+	protected Customer getCustomerRecord(Trade trade) throws Exception {
 		PriorityQueue<Customer> copy = new PriorityQueue<>(customerBufferState.value());
 
 		while(!copy.isEmpty()) {
 			Customer c = copy.poll();
 			if (c.timestamp <= trade.timestamp) {
-				return c.customerInfo;
+				return c;
 			}
 		}
 
-		return "No customer info available";
+		return new Customer(0L, trade.customerId, "No matching customer info");
 	}
 
 	protected void cleanupEligibleCustomerData(Long watermark) throws Exception {
@@ -89,20 +89,20 @@ abstract class EventTimeJoinHelper extends CoProcessFunction<Trade, Customer, En
 		customerBufferState.update(newEnough);
 	}
 
-	protected EnrichedTrade dequeueEnrichedTrade() throws Exception {
-		PriorityQueue<EnrichedTrade> tradeBuffer = tradeBufferState.value();
-		EnrichedTrade enrichedTrade = tradeBuffer.poll();
+	protected Trade dequeueTrade() throws Exception {
+		PriorityQueue<Trade> tradeBuffer = tradeBufferState.value();
+		Trade trade = tradeBuffer.poll();
 		tradeBufferState.update(tradeBuffer);
-		return enrichedTrade;
+		return trade;
 	}
 
-	protected void enqueueEnrichedTrade(EnrichedTrade joinedData) throws Exception {
-		PriorityQueue<EnrichedTrade> tradeBuffer = tradeBufferState.value();
+	protected void enqueueTrade(Trade trade) throws Exception {
+		PriorityQueue<Trade> tradeBuffer = tradeBufferState.value();
 		// order trades from earliest to latest
 		if (tradeBuffer == null) {
-			tradeBuffer = new PriorityQueue<EnrichedTrade>();
+			tradeBuffer = new PriorityQueue<Trade>();
 		}
-		tradeBuffer.add(joinedData);
+		tradeBuffer.add(trade);
 		tradeBufferState.update(tradeBuffer);
 	}
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dataartisans.flinktraining.examples.datastream_java.process;
+package com.dataartisans.flinktraining.solutions.datastream_java.process;
 
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Customer;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.EnrichedTrade;
@@ -24,7 +24,7 @@ import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
-public class LowLatencyEventTimeJoin {
+public class EventTimeJoinSolution {
 	public static void main(String[] args) throws Exception {
 		// set up streaming execution environment
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
