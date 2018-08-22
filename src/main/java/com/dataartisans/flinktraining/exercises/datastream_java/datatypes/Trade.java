@@ -42,4 +42,17 @@ public class Trade implements Comparable<Trade> {
 		return Long.compare(this.timestamp, other.timestamp);
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		else if (o != null && getClass() == o.getClass()) {
+			Trade that = (Trade) o;
+			return ((this.customerId == that.customerId) &&
+					(this.timestamp == that.timestamp));
+		}
+		return false;
+	}
+
 }

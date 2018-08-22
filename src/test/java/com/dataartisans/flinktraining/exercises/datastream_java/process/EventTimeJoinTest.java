@@ -19,7 +19,7 @@ package com.dataartisans.flinktraining.exercises.datastream_java.process;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Customer;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.EnrichedTrade;
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Trade;
-import com.dataartisans.flinktraining.solutions.datastream_java.process.EventTimeJoinFunction;
+import com.dataartisans.flinktraining.solutions.datastream_java.process.EventTimeJoinSolution;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.streaming.api.operators.co.KeyedCoProcessOperator;
 
@@ -38,7 +38,7 @@ public class EventTimeJoinTest {
 	public void testJoinOperator() throws Exception {
 		// instantiate operator
 		KeyedCoProcessOperator<Long, Trade, Customer, EnrichedTrade> operator =
-				new KeyedCoProcessOperator<>(new EventTimeJoinFunction());
+				new KeyedCoProcessOperator<>(new EventTimeJoinSolution.EventTimeJoinFunction());
 
 		// setup test harness
 		TwoInputStreamOperatorTestHarness<Trade, Customer, EnrichedTrade> testHarness =
@@ -120,8 +120,8 @@ public class EventTimeJoinTest {
 		expectedOutput.add(new Watermark(1500L));
 		expectedOutput.add(new Watermark(1600L));
 		expectedOutput.add(new StreamRecord<>(et1700, 1700L));
-		expectedOutput.add(new StreamRecord<>(et1800, 1700L));
-		expectedOutput.add(new StreamRecord<>(et2000, 1700L));
+		expectedOutput.add(new StreamRecord<>(et1800, 1800L));
+		expectedOutput.add(new StreamRecord<>(et2000, 2000L));
 		expectedOutput.add(new Watermark(2000L));
 
 		ConcurrentLinkedQueue<Object> actualOutput = testHarness.getOutput();

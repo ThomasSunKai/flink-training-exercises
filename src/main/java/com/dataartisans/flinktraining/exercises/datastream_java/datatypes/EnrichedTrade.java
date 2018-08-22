@@ -31,9 +31,17 @@ public class EnrichedTrade {
 	public Customer customer;
 
 	public String toString() {
+		String customerInfo;
+
+		if (customer == null) {
+			customerInfo = "null";
+		} else {
+			customerInfo = customer.customerInfo;
+		}
+
 		StringBuilder sb = new StringBuilder();
 		sb.append("EnrichedTrade(").append(trade.timestamp).append(") ");
-		sb.append(customer.customerInfo);
+		sb.append(customerInfo);
 		return sb.toString();
 	}
 
@@ -44,10 +52,9 @@ public class EnrichedTrade {
 		}
 		else if (o != null && getClass() == o.getClass()) {
 			EnrichedTrade that = (EnrichedTrade) o;
-			return ((this.trade.customerId == that.trade.customerId) &&
-					(this.trade.timestamp == that.trade.timestamp) &&
-					(this.customer.customerId == that.customer.customerId) &&
-					(this.customer.timestamp == that.customer.timestamp));
+			return (this.trade.equals(that.trade) &&
+					((this.customer == null && that.customer == null) ||
+							(this.customer.equals(that.customer))));
 		}
 		return false;
 	}
