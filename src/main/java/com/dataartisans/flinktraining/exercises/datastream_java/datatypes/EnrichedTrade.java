@@ -53,8 +53,7 @@ public class EnrichedTrade {
 		else if (o != null && getClass() == o.getClass()) {
 			EnrichedTrade that = (EnrichedTrade) o;
 			return (this.trade.equals(that.trade) &&
-					((this.customer == null && that.customer == null) ||
-							(this.customer.equals(that.customer))));
+					(this.customer == null ? that.customer == null : this.customer.equals(that.customer)));
 		}
 		return false;
 	}

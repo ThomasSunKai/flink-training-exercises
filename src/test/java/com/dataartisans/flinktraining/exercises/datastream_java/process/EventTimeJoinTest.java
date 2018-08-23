@@ -21,6 +21,8 @@ import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Enrich
 import com.dataartisans.flinktraining.exercises.datastream_java.datatypes.Trade;
 import com.dataartisans.flinktraining.solutions.datastream_java.process.EventTimeJoinSolution;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
+import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.operators.co.KeyedCoProcessOperator;
 
 import org.apache.flink.streaming.api.watermark.Watermark;
@@ -28,14 +30,23 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.KeyedTwoInputStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.TestHarnessUtil;
 import org.apache.flink.streaming.util.TwoInputStreamOperatorTestHarness;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class EventTimeJoinTest {
 
+	@Rule
+	public TemporaryFolder tempFolder = new TemporaryFolder();
+
 	@Test
 	public void testJoinOperator() throws Exception {
+		String rocksDbPath = tempFolder.newFolder().getAbsolutePath();
+		RocksDBStateBackend rocksDBStateBackend = new RocksDBStateBackend(new MemoryStateBackend());
+		rocksDBStateBackend.setDbStoragePath(rocksDbPath);
+
 		// instantiate operator
 		KeyedCoProcessOperator<Long, Trade, Customer, EnrichedTrade> operator =
 				new KeyedCoProcessOperator<>(new EventTimeJoinSolution.EventTimeJoinFunction());
@@ -47,6 +58,7 @@ public class EventTimeJoinTest {
 				(Customer c) -> c.customerId,
 				BasicTypeInfo.LONG_TYPE_INFO);
 
+		testHarness.setStateBackend(rocksDBStateBackend);
 		testHarness.setup();
 		testHarness.open();
 

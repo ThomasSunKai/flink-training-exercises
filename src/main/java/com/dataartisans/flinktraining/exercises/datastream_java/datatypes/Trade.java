@@ -49,8 +49,7 @@ public class Trade implements Comparable<Trade> {
 		}
 		else if (o != null && getClass() == o.getClass()) {
 			Trade that = (Trade) o;
-			return ((this.customerId == that.customerId) &&
-					(this.timestamp == that.timestamp));
+			return ((this.customerId.equals(that.customerId)) && (this.timestamp.equals(that.timestamp)));
 		}
 		return false;
 	}

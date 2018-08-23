@@ -49,8 +49,7 @@ public class Customer implements Comparable<Customer> {
 		}
 		else if (o != null && getClass() == o.getClass()) {
 			Customer that = (Customer) o;
-			return ((this.customerId == that.customerId) &&
-					(this.timestamp == that.timestamp));
+			return ((this.customerId.equals(that.customerId)) && (this.timestamp.equals(that.timestamp)));
 		}
 		return false;
 	}
